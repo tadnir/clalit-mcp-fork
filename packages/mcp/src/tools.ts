@@ -1,4 +1,4 @@
-import { connect, type ClalitClient } from "@clalit/core";
+import { connect, DOCUMENT_SOURCE_IDS, DOCUMENT_SOURCES, type ClalitClient } from "@clalit/core";
 import { loadSession } from "@clalit/cli/store";
 import { z } from "zod";
 
@@ -10,6 +10,8 @@ export const TOOL_NAMES = [
   "get_prescription_issue_status",
   "list_lab_orders",
   "get_lab_order",
+  "list_documents",
+  "get_document",
 ] as const;
 
 export async function getClient(): Promise<ClalitClient> {
@@ -205,5 +207,51 @@ export async function getLabOrderTool(args: z.infer<typeof labOrderRefSchema>) {
       ref: args.ref,
     },
     guidance: "Lab-order detail HTML only. Print/PDF/email download is not fetched.",
+  };
+}
+
+export const listDocumentsSchema = z.object({
+  source: z
+    .enum(DOCUMENT_SOURCE_IDS as [string, ...string[]])
+    .describe(DOCUMENT_SOURCES.map((s) => `${s.id}: ${s.description}`).join(" ")),
+  fromDate: z.string().optional().describe("Optional from-date (dd.MM.yyyy). Defaults to the earliest the portal allows."),
+  toDate: z.string().optional().describe("Optional to-date (dd.MM.yyyy). Defaults to today."),
+});
+
+export const documentRefSchema = z.object({
+  ref: z.string().describe("Opaque refToken from list_documents. Never invent action URLs."),
+});
+
+export async function listDocumentsTool(args: z.infer<typeof listDocumentsSchema>) {
+  const client = await getClient();
+  const data = await client.listDocuments(args.source, {
+    fromDate: args.fromDate,
+    toDate: args.toDate,
+  });
+  return {
+    data: data.map((row) => ({
+      source: row.source,
+      date: row.date,
+      details: row.details,
+      ref: row.refToken,
+      next: [{ tool: "get_document", arguments: { ref: row.refToken } }],
+    })),
+    guidance:
+      "Private owner documents only. Preserve Hebrew labels and dates. Do not invent refs. Family switching unsupported.",
+  };
+}
+
+export async function getDocumentTool(args: z.infer<typeof documentRefSchema>) {
+  const client = await getClient();
+  const doc = await client.getDocument(args.ref);
+  return {
+    data: {
+      source: doc.ref.source,
+      filename: doc.filename,
+      contentType: doc.contentType,
+      byteLength: doc.bytes.byteLength,
+      pdfBase64: Buffer.from(doc.bytes).toString("base64"),
+    },
+    guidance: "Original PDF bytes (base64). Not extracted text. Handle as medical PHI.",
   };
 }

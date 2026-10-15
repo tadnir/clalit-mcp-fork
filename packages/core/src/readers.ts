@@ -41,6 +41,18 @@ import {
   type PrescriptionIssueStatusRequest,
   type PrescriptionListItem,
 } from "./prescriptions/index.js";
+import {
+  decodeDocumentRef,
+  documentSource,
+  encodeDocumentRef,
+  parseDocumentsListHtml,
+  selectOptions,
+  type ClalitDocument,
+  type DocumentListItem,
+  type DocumentRef,
+  type ListDocumentsOptions,
+} from "./documents/index.js";
+import { assertPdfBytes, filenameFromContentDisposition } from "./labs/document.js";
 import type { ClalitTransport } from "./transport.js";
 import { readBytes, readText } from "./transport.js";
 import { buildPostBackBody, extractWebFormsState } from "./webforms.js";
@@ -360,6 +372,87 @@ export class ClalitReaders {
     const html = await readText(response);
     return parseLabOrderDetailHtml(html, ref);
   }
+
+  /**
+   * listDocuments — GET a document source's page, POST its date-range search
+   * (once per dropdown option for fan-out sources), parse data-actionurl rows.
+   */
+  async listDocuments(sourceId: string, options: ListDocumentsOptions = {}): Promise<DocumentListItem[]> {
+    this.transport.assertNotIdleExpired();
+    const source = documentSource(sourceId);
+    if (!source) throw new ParseError("UNKNOWN_SOURCE", "Unknown document source.");
+    const listUrl = PORTAL_ORIGIN + source.path;
+    const page = await readText(await this.transport.request(listUrl));
+    const search = source.search;
+    if (!search) return parseDocumentsListHtml(page, source.id);
+
+    const fields = {
+      ...search.fields,
+      [search.fromField]: options.fromDate ?? search.minDate,
+      [search.toField]: options.toDate ?? todayPortalDate(),
+    };
+    const fanOut = search.fanOutSelect ? selectOptions(page, search.fanOutSelect) : [undefined];
+
+    const collected: DocumentListItem[] = [];
+    const seen = new Set<string>();
+    for (const option of fanOut) {
+      const html = await readText(await this.transport.request(listUrl));
+      const state = extractWebFormsState(html);
+      const cleanState = { ...state, hidden: omitFamilySliderFields(state.hidden) };
+      const response = await this.transport.request(listUrl, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: buildPostBackBody(
+          cleanState,
+          option && search.fanOutSelect ? { ...fields, [search.fanOutSelect]: option[0] } : fields,
+          search.submit,
+          "",
+        ),
+      });
+      for (const item of parseDocumentsListHtml(await readText(response), source.id)) {
+        if (seen.has(item.ref.actionUrl)) continue;
+        seen.add(item.ref.actionUrl);
+        // The hospital is the search, not a grid column; keep it with the row.
+        collected.push(option ? { ...item, details: [option[1], ...item.details] } : item);
+      }
+    }
+    return collected;
+  }
+
+  /**
+   * getDocument — GET the row's action URL (selects the document server-side),
+   * then GET the source's PDF stream. Refs only from listDocuments.
+   */
+  async getDocument(refOrToken: DocumentRef | string): Promise<ClalitDocument> {
+    this.transport.assertNotIdleExpired();
+    // Decode even a passed ref: it validates the source and action URL.
+    const ref = decodeDocumentRef(
+      typeof refOrToken === "string" ? refOrToken : encodeDocumentRef(refOrToken),
+    );
+    const source = documentSource(ref.source)!;
+    const exists = await this.transport.request(PORTAL_ORIGIN + ref.actionUrl, { allowLoginHtml: true });
+    await exists.arrayBuffer();
+    if (exists.status === 404) throw new UpstreamError("NO_DOCUMENT", 404);
+    if (!exists.ok) throw new UpstreamError("DOCUMENT_CHECK_FAILED", exists.status);
+
+    const sep = source.pdfPath.includes("?") ? "&" : "?";
+    const pdf = await this.transport.request(`${PORTAL_ORIGIN}${source.pdfPath}${sep}v=${Date.now()}`, {
+      allowLoginHtml: true,
+    });
+    const bytes = await readBytes(pdf);
+    assertPdfBytes(bytes);
+    return {
+      ref,
+      contentType: pdf.headers.get("content-type") || "application/pdf",
+      filename: filenameFromContentDisposition(pdf.headers.get("content-disposition"), `clalit-${ref.source}.pdf`),
+      bytes,
+    };
+  }
+}
+
+function todayPortalDate(): string {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
 /** Explicit refusal helper for any future family-member API. */

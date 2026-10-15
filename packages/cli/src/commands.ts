@@ -74,6 +74,27 @@ export const COMMANDS: Record<string, Command> = {
     options: ["ref", "json"],
     notes: "No PDF/print download.",
   },
+  documents: {
+    usage: "documents --source SOURCE [--from DATE] [--to DATE] [--json]",
+    summary: "List own PDF documents from one source (visit/hospital summaries, …).",
+    description:
+      "Searches a document source's full date range (or --from/--to, dd.MM.yyyy) and lists rows with ref tokens.",
+    options: ["source", "from", "to", "json"],
+    notes: "Sources: visit_summaries, hospital_summaries. hospital_summaries searches each hospital in turn.",
+  },
+  document: {
+    usage: "document --ref TOKEN --out FILE",
+    summary: "Download one document PDF.",
+    description: "Fetches the PDF for a ref token from `documents`.",
+    options: ["ref", "out"],
+  },
+  "download-documents": {
+    usage: "download-documents --out DIR [--source SOURCE]",
+    summary: "Download every document into DIR, with an index.csv.",
+    description:
+      "Saves DIR/<source>/yyyy-MM-dd - <details>.pdf for every source (or one), plus DIR/index.csv.",
+    options: ["out", "source"],
+  },
   "refresh-session": {
     usage: "refresh-session",
     summary: "Optional soft keep-alive via RefreshSession.aspx.",
@@ -84,7 +105,7 @@ export const COMMANDS: Record<string, Command> = {
     usage: "mcp",
     summary: "Run the stdio MCP server.",
     description:
-      "Exposes list_labs, get_lab_result, get_lab_document, list_prescriptions, get_prescription_issue_status, list_lab_orders, get_lab_order for local agents.",
+      "Exposes list_labs, get_lab_result, get_lab_document, list_prescriptions, get_prescription_issue_status, list_lab_orders, get_lab_order, list_documents, get_document for local agents.",
     options: [],
   },
   help: {

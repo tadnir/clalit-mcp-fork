@@ -90,6 +90,8 @@ const UPSTREAM_MESSAGES: Record<string, string> = {
   BOT_CHALLENGE:
     "Imperva blocked this host (often Error 16 on datacenter/cloud IPs). Never bypass Imperva.",
   RESPONSE_TOO_LARGE: "The Clalit response was too large to process.",
+  NO_DOCUMENT: "Clalit has no document for this row.",
+  DOCUMENT_CHECK_FAILED: "Clalit could not prepare this document.",
   UPSTREAM_ERROR: "The Clalit request could not be completed.",
 };
 
