@@ -41,7 +41,7 @@ function safeName(raw: string): string {
 
 /** dd.MM.yyyy → yyyy-MM-dd, so file names sort by date. */
 function isoDate(date?: string): string {
-  const m = date ? /(\d{2})\.(\d{2})\.(\d{4})/.exec(date) : null;
+  const m = date ? /(\d{2})[./](\d{2})[./](\d{4})/.exec(date) : null;
   return m ? `${m[3]}-${m[2]}-${m[1]}` : "undated";
 }
 
@@ -49,21 +49,44 @@ function csvRow(values: string[]): string {
   return values.map((v) => `"${v.replace(/"/g, '""')}"`).join(",");
 }
 
+interface Downloadable {
+  date?: string;
+  details: string[];
+  fetch(): Promise<{ bytes: Uint8Array }>;
+}
+
+/** Document sources, plus "labs": the lab results that have a PDF. */
+async function listDownloadables(client: ClalitClient, id: string): Promise<Downloadable[]> {
+  if (id === "labs") {
+    const labs = await client.listLabs();
+    return labs
+      .filter((lab) => lab.refToken)
+      .map((lab) => ({
+        date: lab.date,
+        details: [lab.name],
+        fetch: () => client.getLabDocument(lab.refToken!),
+      }));
+  }
+  const items: DocumentListItem[] = await client.listDocuments(id);
+  return items.map((item) => ({ ...item, fetch: () => client.getDocument(item.ref) }));
+}
+
 /**
- * Download every document of the given sources into OUT/<source title>/,
+ * Download every document of the given sources into OUT/<source>/,
  * named "yyyy-MM-dd - details.pdf", with OUT/index.csv listing them.
  */
 async function downloadDocuments(client: ClalitClient, out: string, sourceIds: string[]): Promise<number> {
   const index = [csvRow(["source", "date", "details", "file"])];
   let failed = 0;
   for (const id of sourceIds) {
-    const source = documentSource(id)!;
-    const items: DocumentListItem[] = await client.listDocuments(id);
+    const source = { id };
+    const items = await listDownloadables(client, id);
     const used = new Set<string>();
     let saved = 0;
+    let missing = 0;
     for (const item of items) {
       try {
-        const doc = await client.getDocument(item.ref);
+        const doc = await item.fetch();
         const base = safeName([isoDate(item.date), ...item.details].join(" - "));
         let name = base;
         for (let n = 2; used.has(name); n++) name = `${base} (${n})`;
@@ -74,11 +97,16 @@ async function downloadDocuments(client: ClalitClient, out: string, sourceIds: s
         index.push(csvRow([source.id, isoDate(item.date), item.details.join(" | "), `${source.id}/${name}.pdf`]));
         saved++;
       } catch (err) {
+        // Not every lab result has a PDF; that is not a failure.
+        if (err instanceof Error && "code" in err && err.code === "NO_DOCUMENT") {
+          missing++;
+          continue;
+        }
         failed++;
         console.error(`${source.id}: ${err instanceof Error ? err.message : "download failed"}`);
       }
     }
-    console.log(`${source.id}: found ${items.length}, saved ${saved}`);
+    console.log(`${source.id}: found ${items.length}, saved ${saved}${missing ? `, ${missing} without a PDF` : ""}`);
   }
   await mkdir(out, { recursive: true });
   // BOM so Excel reads the Hebrew as UTF-8.
@@ -328,14 +356,14 @@ export async function runCli(args: string[]): Promise<number> {
     case "download-documents": {
       const out = flag(rest, "out");
       const only = flag(rest, "source");
-      if (!out || (only && !documentSource(only))) {
-        console.error(`Usage: clalit-mcp download-documents --out DIR [--source (${DOCUMENT_SOURCE_IDS.join("|")})]`);
+      if (!out || (only && only !== "labs" && !documentSource(only))) {
+        console.error(`Usage: clalit-mcp download-documents --out DIR [--source (${[...DOCUMENT_SOURCE_IDS, "labs"].join("|")})]`);
         return 2;
       }
       const client = await requireClient();
       if (!client) return 3;
       try {
-        return await downloadDocuments(client, out, only ? [only] : DOCUMENT_SOURCES.map((s) => s.id));
+        return await downloadDocuments(client, out, only ? [only] : [...DOCUMENT_SOURCES.map((s) => s.id), "labs"]);
       } catch (err) {
         console.error(err instanceof Error ? err.message : "download-documents failed");
         return 1;

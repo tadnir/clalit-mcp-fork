@@ -32,6 +32,28 @@ export const DOCUMENT_SOURCES: readonly DocumentSource[] = [
       fanOutSelect: `${BODY}ddlHospitalName`,
     },
   },
+  {
+    id: "medical_approvals",
+    title: "אישורים רפואיים",
+    description:
+      "Medical certificates of every type: sick notes, visit confirmations, medical information summaries (Hebrew/English), and more.",
+    path: "/OnlineWeb/Services/MedicalApproval/MedicalApproval.aspx",
+    pdfPath: "/OnlineWeb/Services/MedicalApproval/MedicalApprovalPDFHandler.ashx?Print=false",
+    search: {
+      fromField: `${BODY}dateRange$txtFromDate`,
+      toField: `${BODY}dateRange$txtToDate`,
+      minDate: "01.03.2020",
+      submit: `${BODY}btnShow$lnkSubButton`,
+      fields: { [`${BODY}ddlMedicalApprovalTypes`]: "0" },
+    },
+  },
+  {
+    id: "form17",
+    title: "התחייבויות (טופס 17)",
+    description: "Form 17 commitments (התחייבויות). The portal only keeps the last year.",
+    path: "/OnlineWeb/Services/Form17/Form17.aspx",
+    pdfPath: "/OnlineWeb/Services/Form17/Form17PdfHandler.ashx?print=false",
+  },
 ];
 
 export const DOCUMENT_SOURCE_IDS = DOCUMENT_SOURCES.map((s) => s.id);

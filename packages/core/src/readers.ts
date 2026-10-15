@@ -410,8 +410,8 @@ export class ClalitReaders {
         ),
       });
       for (const item of parseDocumentsListHtml(await readText(response), source.id)) {
-        if (seen.has(item.ref.actionUrl)) continue;
-        seen.add(item.ref.actionUrl);
+        if (seen.has(item.refToken)) continue;
+        seen.add(item.refToken);
         // The hospital is the search, not a grid column; keep it with the row.
         collected.push(option ? { ...item, details: [option[1], ...item.details] } : item);
       }
@@ -430,7 +430,12 @@ export class ClalitReaders {
       typeof refOrToken === "string" ? refOrToken : encodeDocumentRef(refOrToken),
     );
     const source = documentSource(ref.source)!;
-    const exists = await this.transport.request(PORTAL_ORIGIN + ref.actionUrl, { allowLoginHtml: true });
+    const exists = await this.transport.request(PORTAL_ORIGIN + ref.actionUrl, {
+      allowLoginHtml: true,
+      ...(ref.actionData
+        ? { method: "POST", headers: { "content-type": "application/json; charset=utf-8" }, body: ref.actionData }
+        : {}),
+    });
     await exists.arrayBuffer();
     if (exists.status === 404) throw new UpstreamError("NO_DOCUMENT", 404);
     if (!exists.ok) throw new UpstreamError("DOCUMENT_CHECK_FAILED", exists.status);

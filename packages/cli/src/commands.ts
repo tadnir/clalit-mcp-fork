@@ -80,7 +80,7 @@ export const COMMANDS: Record<string, Command> = {
     description:
       "Searches a document source's full date range (or --from/--to, dd.MM.yyyy) and lists rows with ref tokens.",
     options: ["source", "from", "to", "json"],
-    notes: "Sources: visit_summaries, hospital_summaries. hospital_summaries searches each hospital in turn.",
+    notes: "Sources: visit_summaries, hospital_summaries, medical_approvals, form17. hospital_summaries searches each hospital in turn.",
   },
   document: {
     usage: "document --ref TOKEN --out FILE",
@@ -92,7 +92,7 @@ export const COMMANDS: Record<string, Command> = {
     usage: "download-documents --out DIR [--source SOURCE]",
     summary: "Download every document into DIR, with an index.csv.",
     description:
-      "Saves DIR/<source>/yyyy-MM-dd - <details>.pdf for every source (or one), plus DIR/index.csv.",
+      "Saves DIR/<source>/yyyy-MM-dd - <details>.pdf for every document source and lab result PDF (or one source; `labs` for lab PDFs), plus DIR/index.csv.",
     options: ["out", "source"],
   },
   "refresh-session": {

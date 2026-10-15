@@ -40,6 +40,24 @@ describe("document sources", () => {
     ).toThrow();
   });
 
+  test("absolute portal URLs, POST action data and dd/MM/yyyy dates", () => {
+    const html = `<table>
+<tr class="ClalitGridRow"><td>15/06/2017</td><td>בית חולים</td><td class="ClalitGridActions">
+  <a data-actionurl="https://e-services.clalit.co.il/onlineweb/api/SummaryLetterPdf/DoesPdfExists/120/1?docId=42">v</a></td></tr>
+<tr class="ClalitGridRow"><td>20/07/2026</td><td class="ClalitGridActions">
+  <a class="GridBtn" data-actionurl="/OnlineWeb/api/Form17/DoesPdfExists" data-actiondata='{"issueDate":"20/07/2026","tofes17No":"abc%252f"}'>v</a>
+  <a class="GridBtnPrint" data-actionurl="/OnlineWeb/api/Form17/DoesPdfExists" data-actiondata='{"issueDate":"20/07/2026","tofes17No":"abc%252f"}'>p</a></td></tr>
+<tr class="ClalitGridRow"><td>01/01/2026</td><td class="ClalitGridActions">
+  <a data-actionurl="/OnlineWeb/api/Form17/DoesPdfExists" data-actiondata='{"nested":{"x":"y"}}'>v</a></td></tr>
+</table>`;
+    const rows = parseDocumentsListHtml(html, "form17");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.date).toBe("15.06.2017");
+    expect(rows[0]!.ref.actionUrl).toBe("/onlineweb/api/SummaryLetterPdf/DoesPdfExists/120/1?docId=42");
+    expect(rows[1]!.date).toBe("20.07.2026");
+    expect(decodeDocumentRef(rows[1]!.refToken).actionData).toBe('{"issueDate":"20/07/2026","tofes17No":"abc%252f"}');
+  });
+
   test("fan-out options skip the placeholder", () => {
     expect(selectOptions(GRID, "ddlHospitalName")).toEqual([["320", "איכילוב"]]);
   });
@@ -47,5 +65,7 @@ describe("document sources", () => {
   test("known sources", () => {
     expect(DOCUMENT_SOURCE_IDS).toContain("visit_summaries");
     expect(DOCUMENT_SOURCE_IDS).toContain("hospital_summaries");
+    expect(DOCUMENT_SOURCE_IDS).toContain("medical_approvals");
+    expect(DOCUMENT_SOURCE_IDS).toContain("form17");
   });
 });

@@ -40,6 +40,8 @@ export interface DocumentSearch {
 export interface DocumentRef {
   source: string;
   actionUrl: string;
+  /** Row's `data-actiondata` JSON; when present the action URL is POSTed with it. */
+  actionData?: string;
 }
 
 export interface DocumentListItem {
